@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { redis } from "./lib/redis"
 import { nanoid } from "nanoid"
 
+const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|preview|fetch|HeadlessChrome/i
+
 export const proxy = async (req: NextRequest) => {
     const pathname = req.nextUrl.pathname
 
@@ -9,6 +11,12 @@ export const proxy = async (req: NextRequest) => {
 
     if(!roomMatch){
         return NextResponse.redirect(new URL("/", req.url))
+    }
+
+    // Skip bot/crawler requests so link previews don't consume room slots
+    const ua = req.headers.get("user-agent") ?? ""
+    if(BOT_UA_PATTERN.test(ua)){
+        return NextResponse.next()
     }
 
     const roomId = roomMatch[1]
@@ -26,7 +34,7 @@ export const proxy = async (req: NextRequest) => {
     }
 
     if(meta.connected.length >=2){
-        return NextResponse.redirect(new URL("/error=room-full", req.url))
+        return NextResponse.redirect(new URL("/?error=room-full", req.url))
     }
 
     const response = NextResponse.next()
@@ -37,7 +45,7 @@ export const proxy = async (req: NextRequest) => {
             path: "/",
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict"
+            sameSite: "lax"
         }
     )
 
